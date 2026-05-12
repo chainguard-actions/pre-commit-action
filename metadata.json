@@ -1,0 +1,8 @@
+{
+  "owner": "pre-commit",
+  "name": "action",
+  "alias": "pre-commit-action",
+  "visibility": "public",
+  "description": "a GitHub action to run `pre-commit`",
+  "block_publish": false
+}

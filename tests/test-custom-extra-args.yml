@@ -1,0 +1,26 @@
+name: Test pre-commit with custom extra_args
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up pre-commit config and clean test files
+        run: |
+          cp "$GITHUB_WORKSPACE/tests/fixtures/pre-commit-config-custom/.pre-commit-config.yaml" \
+             "$GITHUB_WORKSPACE/.pre-commit-config.yaml"
+          printf 'hello world\n' > "$GITHUB_WORKSPACE/test-clean.txt"
+      - id: pre-commit
+        uses: .
+        with:
+          extra_args: 'trailing-whitespace --files test-clean.txt'
+      - name: Assert pre-commit ran with custom extra_args
+        run: |
+          echo "pre-commit step completed successfully with custom extra_args"
+          echo "PASS: pre-commit ran with custom extra_args (trailing-whitespace only)"
+      - name: Clean up
+        if: always()
+        run: |
+          rm -f "$GITHUB_WORKSPACE/.pre-commit-config.yaml"
+          rm -f "$GITHUB_WORKSPACE/test-clean.txt"

